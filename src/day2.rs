@@ -71,6 +71,32 @@ fn is_game_possible(game: &&Game) -> bool {
         .all(|reveal| reveal.red_cubes <= 12 && reveal.green_cubes <= 13 && reveal.blue_cubes <= 14)
 }
 
+pub fn part2(games: &[Game]) -> u32 {
+    games.iter().map(power_of_minimum_set).sum()
+}
+
+fn power_of_minimum_set(game: &Game) -> u32 {
+    let max_red_cubes_revealed = game
+        .reveals
+        .iter()
+        .map(|reveal| reveal.red_cubes)
+        .max()
+        .unwrap_or(0);
+    let max_green_cubes_revealed = game
+        .reveals
+        .iter()
+        .map(|reveal| reveal.green_cubes)
+        .max()
+        .unwrap_or(0);
+    let max_blue_cubes_revealed = game
+        .reveals
+        .iter()
+        .map(|reveal| reveal.blue_cubes)
+        .max()
+        .unwrap_or(0);
+    max_red_cubes_revealed * max_green_cubes_revealed * max_blue_cubes_revealed
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -86,5 +112,17 @@ mod tests {
             Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green
         "};
         assert_eq!(part1(&generator(input)), 8);
+    }
+
+    #[test]
+    fn part2_example() {
+        let input = indoc! {"
+            Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green
+            Game 2: 1 blue, 2 green; 3 green, 4 blue, 1 red; 1 green, 1 blue
+            Game 3: 8 green, 6 blue, 20 red; 5 blue, 4 red, 13 green; 5 green, 1 red
+            Game 4: 1 green, 3 red, 6 blue; 3 green, 6 red; 3 green, 15 blue, 14 red
+            Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green
+        "};
+        assert_eq!(part2(&generator(input)), 2286);
     }
 }
