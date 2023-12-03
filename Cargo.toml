@@ -5,3 +5,6 @@ edition = "2021"
 
 [dependencies]
 aoc-main = { version = "0.5.0", features = ["bench"] }
+
+[dev-dependencies]
+indoc = "2.0.4"
