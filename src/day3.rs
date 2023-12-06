@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 struct Coordinate(u32, u32);
@@ -8,12 +11,21 @@ pub struct EngineSchematic {
 }
 
 impl EngineSchematic {
-    fn is_symbol(&self, coordinate: &Coordinate) -> bool {
+    fn get_item(&self, x: u32, y: u32) -> Option<&SchematicItem> {
+        self.items.get(&Coordinate(x, y))
+    }
+    fn is_digit(&self, coordinate: &Coordinate) -> bool {
         self.items
             .get(coordinate)
-            .filter(|item| matches!(item, SchematicItem::Symbol(_)))
+            .filter(|item| matches!(item, SchematicItem::Digit(_)))
             .is_some()
     }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum SchematicItem {
+    Symbol(char),
+    Digit(u32),
 }
 
 impl fmt::Display for EngineSchematic {
@@ -21,19 +33,12 @@ impl fmt::Display for EngineSchematic {
         let Coordinate(max_x, max_y) = self.max_coords;
         let mut output = String::new();
         for y in 0..=max_y {
-            let mut dots_to_skip = 0;
             for x in 0..=max_x {
                 if let Some(schematic_item) = self.items.get(&Coordinate(x, y)) {
                     match schematic_item {
                         SchematicItem::Symbol(sym) => output.push(*sym),
-                        SchematicItem::Number(num) => {
-                            let num_str = num.to_string();
-                            output.push_str(num_str.as_str());
-                            dots_to_skip = num_str.len() - 1;
-                        }
+                        SchematicItem::Digit(num) => output.push_str(num.to_string().as_str()),
                     }
-                } else if dots_to_skip > 0 {
-                    dots_to_skip -= 1;
                 } else {
                     output.push('.');
                 }
@@ -44,148 +49,118 @@ impl fmt::Display for EngineSchematic {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum SchematicItem {
-    Symbol(char),
-    Number(u32),
-}
-
 pub fn generator(input: &str) -> EngineSchematic {
     let mut engine_schematic_items = HashMap::new();
-    let lines = input.lines();
-    lines.enumerate().for_each(|(y, schematic_line)| {
-        let mut chars = schematic_line.chars().enumerate();
-        let (x, c) = chars.next().expect("Input line should not be empty");
-        parse_schematic_item(c, &mut chars, &mut engine_schematic_items, x, y, 0);
+    let mut x_max = 0;
+    let mut y_max = 0;
+    input.lines().enumerate().for_each(|(y, schematic_line)| {
+        schematic_line
+            .chars()
+            .enumerate()
+            .for_each(|(x, c)| match c {
+                '.' => (),
+                '0'..='9' => {
+                    engine_schematic_items.insert(
+                        Coordinate(x as u32, y as u32),
+                        SchematicItem::Digit(c.to_digit(10).unwrap()),
+                    );
+                }
+                symbol => {
+                    engine_schematic_items.insert(
+                        Coordinate(x as u32, y as u32),
+                        SchematicItem::Symbol(symbol),
+                    );
+                }
+            });
+        x_max = schematic_line.len() - 1;
+        y_max = y;
     });
-    let input_len_with_trailing_newline =
-        input.strip_suffix('\n').unwrap_or(input).len() as u32 + 1;
-    let line_len = input.lines().next().unwrap().len() as u32;
-    let x_max = line_len - 1;
-    // let y_max = (len as f32 / (x_max + 2) as f32).ceil() as u32 - 1;
-    let y_max = ((input_len_with_trailing_newline) / (line_len + 1)) - 1;
     EngineSchematic {
-        max_coords: Coordinate(x_max, y_max),
+        max_coords: Coordinate(x_max as u32, y_max as u32),
         items: engine_schematic_items,
     }
 }
 
-fn parse_schematic_item(
-    c: char,
-    chars: &mut std::iter::Enumerate<std::str::Chars<'_>>,
-    engine_schematic_items: &mut HashMap<Coordinate, SchematicItem>,
-    x: usize,
-    y: usize,
-    num_so_far: u32,
-) {
-    match c {
-        '.' => {
-            if num_so_far > 0 {
-                engine_schematic_items.insert(
-                    Coordinate((x - num_so_far.to_string().len()) as u32, y as u32),
-                    SchematicItem::Number(num_so_far),
-                );
-            }
-            while let Some((x, c)) = chars.next() {
-                parse_schematic_item(c, chars, engine_schematic_items, x, y, 0);
-            }
-        }
-        '0'..='9' => {
-            let digit = c.to_digit(10).unwrap();
-            if let Some((x, c)) = chars.next() {
-                parse_schematic_item(
-                    c,
-                    chars,
-                    engine_schematic_items,
-                    x,
-                    y,
-                    num_so_far * 10 + digit,
-                );
-            } else if num_so_far > 0 {
-                engine_schematic_items.insert(
-                    Coordinate((x - num_so_far.to_string().len()) as u32, y as u32),
-                    SchematicItem::Number(num_so_far * 10 + digit),
-                );
-            } else {
-                engine_schematic_items
-                    .insert(Coordinate(x as u32, y as u32), SchematicItem::Number(digit));
-            }
-        }
-        symbol => {
-            engine_schematic_items.insert(
-                Coordinate(x as u32, y as u32),
-                SchematicItem::Symbol(symbol),
-            );
-            if num_so_far > 0 {
-                engine_schematic_items.insert(
-                    Coordinate((x - num_so_far.to_string().len()) as u32, y as u32),
-                    SchematicItem::Number(num_so_far),
-                );
-            }
-            while let Some((x, c)) = chars.next() {
-                parse_schematic_item(c, chars, engine_schematic_items, x, y, 0);
-            }
-        }
-    };
-}
-
 pub fn part1(engine_schematic: &EngineSchematic) -> u32 {
-    // print!("{}", engine_schematic);
     engine_schematic
         .items
         .iter()
-        .filter(|(coordinate, schematic_item)| {
-            is_part_number(schematic_item, coordinate, engine_schematic)
-        })
-        .map(|(_, schematic_item)| {
-            if let SchematicItem::Number(num) = schematic_item {
-                num
-            } else {
-                &0
-            }
-        })
+        .filter(|(_, item)| matches!(item, SchematicItem::Symbol(_)))
+        .flat_map(|(coordinate, _)| get_adjacent_numbers(coordinate, engine_schematic))
         .sum()
 }
 
-fn is_part_number(
-    schematic_item: &SchematicItem,
-    coordinate: &Coordinate,
-    engine_schematic: &EngineSchematic,
-) -> bool {
-    if let SchematicItem::Number(num) = schematic_item {
-        get_adjacent_coordinates(num, coordinate, &engine_schematic.max_coords)
-            // get_adjacent_coordinates_take2(num, coordinate)
-            .iter()
-            .any(|adjacent_coordinate| engine_schematic.is_symbol(adjacent_coordinate))
-    } else {
-        false
-    }
+fn get_adjacent_numbers(coordinate: &Coordinate, engine_schematic: &EngineSchematic) -> Vec<u32> {
+    let adjacent_coordinates = get_adjacent_coordinates(coordinate, &engine_schematic.max_coords);
+    let digit_coordinates = adjacent_coordinates
+        .iter()
+        .filter(|coord| engine_schematic.is_digit(coord))
+        .collect();
+    extract_numbers(digit_coordinates, engine_schematic)
 }
 
-fn get_adjacent_coordinates(
-    num: &u32,
-    coordinate: &Coordinate,
-    max_coords: &Coordinate,
-) -> Vec<Coordinate> {
-    let num_digits = num.to_string().len() as u32;
+fn extract_numbers(
+    digit_coordinates: Vec<&Coordinate>,
+    engine_schematic: &EngineSchematic,
+) -> Vec<u32> {
+    let mut visited = HashSet::new();
+    let mut nums = Vec::new();
+    for Coordinate(cx, cy) in digit_coordinates {
+        if visited.contains(&(*cx, *cy)) {
+            continue;
+        }
+        visited.insert((*cx, *cy));
+        let mut num_str = String::new();
+        // Collect digits on left
+        let mut x = *cx;
+        while let Some(SchematicItem::Digit(d)) = engine_schematic.get_item(x, *cy) {
+            visited.insert((x.to_owned(), *cy));
+            num_str = format!("{}{}", d, num_str);
+            if x > 0 {
+                x -= 1;
+            } else {
+                break;
+            }
+        }
+        // Collect digits on the right
+        let max_x = engine_schematic.max_coords.0;
+        let mut x = *cx + 1; // could overflow but won't matter, at least yet, so keeping symmetry
+        while let Some(SchematicItem::Digit(d)) = engine_schematic.get_item(x, *cy) {
+            visited.insert((x.to_owned(), *cy));
+            num_str = format!("{}{}", num_str, d);
+            if x < max_x {
+                x += 1;
+            } else {
+                break;
+            }
+        }
+        nums.push(
+            num_str
+                .parse()
+                .expect("Digits appended should form a number"),
+        );
+    }
+    nums
+}
+
+fn get_adjacent_coordinates(coordinate: &Coordinate, max_coords: &Coordinate) -> Vec<Coordinate> {
     let Coordinate(x, y) = coordinate;
     let Coordinate(max_x, max_y) = max_coords;
-    let effective_max_x = max_x - num_digits;
     let x_possibilities = match *x {
-        0 => 0..=num_digits,
-        x if x == effective_max_x => effective_max_x - 1..=*max_x,
-        other => other - 1..=other + num_digits,
+        0 => vec![0, 1],
+        x if x == *max_x => vec![max_x - 1, *max_x],
+        other => vec![other - 1, other, other + 1],
     };
     let y_possibilities = match *y {
         0 => vec![0, 1],
-        y if y == *max_y => vec![*max_y, max_y - 1],
+        y if y == *max_y => vec![max_y - 1, *max_y],
         other => vec![other - 1, other, other + 1],
     };
     x_possibilities
         .into_iter()
         .flat_map(|x| y_possibilities.iter().map(move |y| Coordinate(x, *y)))
         // filter out num's own overlapping coordinates
-        .filter(|Coordinate(px, py)| !(py == y && (x..&(x + num_digits - 1)).contains(&px)))
+        .filter(|Coordinate(px, py)| !(py == y && px == x))
         .collect()
 }
 
@@ -210,22 +185,40 @@ mod tests {
             .664.598..
         "};
         let mut expected_items = HashMap::new();
-        expected_items.insert(Coordinate(0, 0), SchematicItem::Number(467));
-        expected_items.insert(Coordinate(5, 0), SchematicItem::Number(114));
+        expected_items.insert(Coordinate(0, 0), SchematicItem::Digit(4));
+        expected_items.insert(Coordinate(1, 0), SchematicItem::Digit(6));
+        expected_items.insert(Coordinate(2, 0), SchematicItem::Digit(7));
+        expected_items.insert(Coordinate(5, 0), SchematicItem::Digit(1));
+        expected_items.insert(Coordinate(6, 0), SchematicItem::Digit(1));
+        expected_items.insert(Coordinate(7, 0), SchematicItem::Digit(4));
         expected_items.insert(Coordinate(3, 1), SchematicItem::Symbol('*'));
-        expected_items.insert(Coordinate(2, 2), SchematicItem::Number(35));
-        expected_items.insert(Coordinate(6, 2), SchematicItem::Number(633));
+        expected_items.insert(Coordinate(2, 2), SchematicItem::Digit(3));
+        expected_items.insert(Coordinate(3, 2), SchematicItem::Digit(5));
+        expected_items.insert(Coordinate(6, 2), SchematicItem::Digit(6));
+        expected_items.insert(Coordinate(7, 2), SchematicItem::Digit(3));
+        expected_items.insert(Coordinate(8, 2), SchematicItem::Digit(3));
         expected_items.insert(Coordinate(6, 3), SchematicItem::Symbol('#'));
-        expected_items.insert(Coordinate(0, 4), SchematicItem::Number(617));
+        expected_items.insert(Coordinate(0, 4), SchematicItem::Digit(6));
+        expected_items.insert(Coordinate(1, 4), SchematicItem::Digit(1));
+        expected_items.insert(Coordinate(2, 4), SchematicItem::Digit(7));
         expected_items.insert(Coordinate(3, 4), SchematicItem::Symbol('*'));
         expected_items.insert(Coordinate(5, 5), SchematicItem::Symbol('+'));
-        expected_items.insert(Coordinate(7, 5), SchematicItem::Number(58));
-        expected_items.insert(Coordinate(2, 6), SchematicItem::Number(592));
-        expected_items.insert(Coordinate(6, 7), SchematicItem::Number(755));
+        expected_items.insert(Coordinate(7, 5), SchematicItem::Digit(5));
+        expected_items.insert(Coordinate(8, 5), SchematicItem::Digit(8));
+        expected_items.insert(Coordinate(2, 6), SchematicItem::Digit(5));
+        expected_items.insert(Coordinate(3, 6), SchematicItem::Digit(9));
+        expected_items.insert(Coordinate(4, 6), SchematicItem::Digit(2));
+        expected_items.insert(Coordinate(6, 7), SchematicItem::Digit(7));
+        expected_items.insert(Coordinate(7, 7), SchematicItem::Digit(5));
+        expected_items.insert(Coordinate(8, 7), SchematicItem::Digit(5));
         expected_items.insert(Coordinate(3, 8), SchematicItem::Symbol('$'));
         expected_items.insert(Coordinate(5, 8), SchematicItem::Symbol('*'));
-        expected_items.insert(Coordinate(1, 9), SchematicItem::Number(664));
-        expected_items.insert(Coordinate(5, 9), SchematicItem::Number(598));
+        expected_items.insert(Coordinate(1, 9), SchematicItem::Digit(6));
+        expected_items.insert(Coordinate(2, 9), SchematicItem::Digit(6));
+        expected_items.insert(Coordinate(3, 9), SchematicItem::Digit(4));
+        expected_items.insert(Coordinate(5, 9), SchematicItem::Digit(5));
+        expected_items.insert(Coordinate(6, 9), SchematicItem::Digit(9));
+        expected_items.insert(Coordinate(7, 9), SchematicItem::Digit(8));
         let schematic = generator(input);
         println!("{}", schematic);
         assert_eq!(schematic.items, expected_items);
@@ -246,7 +239,9 @@ mod tests {
             ...$.*....
             .664.598..
         "};
-        assert_eq!(part1(&generator(input)), 4361);
+        let schematic = generator(input);
+        println!("{}", schematic);
+        assert_eq!(part1(&schematic), 4361);
     }
 
     #[test]
@@ -257,12 +252,15 @@ mod tests {
             23$..1
         "};
         let mut expected_items = HashMap::new();
-        expected_items.insert(Coordinate(0, 0), SchematicItem::Number(4));
-        expected_items.insert(Coordinate(3, 0), SchematicItem::Number(134));
+        expected_items.insert(Coordinate(0, 0), SchematicItem::Digit(4));
+        expected_items.insert(Coordinate(3, 0), SchematicItem::Digit(1));
+        expected_items.insert(Coordinate(4, 0), SchematicItem::Digit(3));
+        expected_items.insert(Coordinate(5, 0), SchematicItem::Digit(4));
         expected_items.insert(Coordinate(4, 1), SchematicItem::Symbol('#'));
-        expected_items.insert(Coordinate(0, 2), SchematicItem::Number(23));
+        expected_items.insert(Coordinate(0, 2), SchematicItem::Digit(2));
+        expected_items.insert(Coordinate(1, 2), SchematicItem::Digit(3));
         expected_items.insert(Coordinate(2, 2), SchematicItem::Symbol('$'));
-        expected_items.insert(Coordinate(5, 2), SchematicItem::Number(1));
+        expected_items.insert(Coordinate(5, 2), SchematicItem::Digit(1));
         let schematic = generator(input);
         println!("{}", schematic);
         assert_eq!(schematic.items, expected_items);
@@ -293,8 +291,10 @@ mod tests {
             4..134
             ....#."};
         let mut expected_items = HashMap::new();
-        expected_items.insert(Coordinate(0, 0), SchematicItem::Number(4));
-        expected_items.insert(Coordinate(3, 0), SchematicItem::Number(134));
+        expected_items.insert(Coordinate(0, 0), SchematicItem::Digit(4));
+        expected_items.insert(Coordinate(3, 0), SchematicItem::Digit(1));
+        expected_items.insert(Coordinate(4, 0), SchematicItem::Digit(3));
+        expected_items.insert(Coordinate(5, 0), SchematicItem::Digit(4));
         expected_items.insert(Coordinate(4, 1), SchematicItem::Symbol('#'));
         let schematic = generator(input);
         println!("{}", schematic);
