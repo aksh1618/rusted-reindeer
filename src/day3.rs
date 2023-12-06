@@ -90,6 +90,22 @@ pub fn part1(engine_schematic: &EngineSchematic) -> u32 {
         .sum()
 }
 
+pub fn part2(engine_schematic: &EngineSchematic) -> u32 {
+    engine_schematic
+        .items
+        .iter()
+        .filter(|(_, item)| matches!(item, SchematicItem::Symbol('*')))
+        .map(|(coordinate, _)| get_adjacent_numbers(coordinate, engine_schematic))
+        .filter_map(|nums| {
+            if nums.len() == 2 {
+                Some(nums[0] * nums[1])
+            } else {
+                None
+            }
+        })
+        .sum()
+}
+
 fn get_adjacent_numbers(coordinate: &Coordinate, engine_schematic: &EngineSchematic) -> Vec<u32> {
     let adjacent_coordinates = get_adjacent_coordinates(coordinate, &engine_schematic.max_coords);
     let digit_coordinates = adjacent_coordinates
@@ -300,5 +316,24 @@ mod tests {
         println!("{}", schematic);
         assert_eq!(schematic.items, expected_items);
         assert_eq!(schematic.max_coords, Coordinate(5, 1));
+    }
+
+    #[test]
+    fn part2_example() {
+        let input = indoc! {"
+            467..114..
+            ...*......
+            ..35..633.
+            ......#...
+            617*......
+            .....+.58.
+            ..592.....
+            ......755.
+            ...$.*....
+            .664.598..
+        "};
+        let schematic = generator(input);
+        println!("{}", schematic);
+        assert_eq!(part2(&schematic), 467835);
     }
 }
