@@ -7,6 +7,15 @@ pub struct Card {
     player_numbers: HashSet<u32>,
 }
 
+impl Card {
+    fn get_won_numbers_count(&self) -> u32 {
+        self.winning_numbers
+            .iter()
+            .filter(|num| self.player_numbers.contains(num))
+            .count() as u32
+    }
+}
+
 pub fn generator(input: &str) -> Pile {
     let expectation = "Input should be in prescribed format";
     input
@@ -38,18 +47,33 @@ pub fn generator(input: &str) -> Pile {
 pub fn part1(pile: &Pile) -> u32 {
     pile.values()
         .map(|card| {
-            let winning_numbers_count = card
-                .winning_numbers
-                .iter()
-                .filter(|num| card.player_numbers.contains(num))
-                .count() as u32;
-            if winning_numbers_count > 0 {
-                u32::pow(2, winning_numbers_count - 1)
+            let won_numbers_count = card.get_won_numbers_count();
+            if won_numbers_count > 0 {
+                u32::pow(2, won_numbers_count - 1)
             } else {
                 0
             }
         })
         .sum()
+}
+
+pub fn part2(pile: &Pile) -> u32 {
+    let mut new_pile_counts = HashMap::new();
+    for i in 1..=pile.len() as u32 {
+        new_pile_counts.insert(i, 1);
+    }
+    for i in 1..=pile.len() as u32 {
+        let card = pile.get(&i).unwrap();
+        let won_numbers_count = card.get_won_numbers_count();
+        let self_count = new_pile_counts.get(&i).unwrap().to_owned();
+        for j in 1..=won_numbers_count {
+            new_pile_counts
+                .entry(i + j)
+                .and_modify(|cnt| *cnt += self_count)
+                .or_insert(0);
+        }
+    }
+    new_pile_counts.values().sum()
 }
 
 #[cfg(test)]
@@ -68,5 +92,18 @@ mod test {
             Card 6: 31 18 13 56 72 | 74 77 10 23 35 67 36 11
         "};
         assert_eq!(part1(&generator(input)), 13);
+    }
+
+    #[test]
+    fn part2_example() {
+        let input = indoc! {"
+            Card 1: 41 48 83 86 17 | 83 86  6 31 17  9 48 53
+            Card 2: 13 32 20 16 61 | 61 30 68 82 17 32 24 19
+            Card 3:  1 21 53 59 44 | 69 82 63 72 16 21 14  1
+            Card 4: 41 92 73 84 69 | 59 84 76 51 58  5 54 83
+            Card 5: 87 83 26 28 32 | 88 30 70 12 93 22 82 36
+            Card 6: 31 18 13 56 72 | 74 77 10 23 35 67 36 11
+        "};
+        assert_eq!(part2(&generator(input)), 30);
     }
 }
