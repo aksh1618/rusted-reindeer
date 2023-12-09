@@ -9,3 +9,12 @@ getset = "0.1.2"
 
 [dev-dependencies]
 indoc = "2.0.4"
+
+[lints.clippy]
+# Warn
+# suspicious, complexity, perf & style groups are warn-by-default
+pedantic = "warn"
+unwrap_used = "warn"
+# Allow
+cast_possible_truncation = "allow" # Used a lot for casting usize to u32 in AoC Problems
+map_unwrap_or = "allow"            # This reduces readability; track https://github.com/rust-lang/rust-clippy/issues/10428

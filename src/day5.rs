@@ -13,6 +13,7 @@ pub struct GardenAlmanac {
 }
 
 impl GardenAlmanac {
+    #[allow(clippy::trivially_copy_pass_by_ref)] // && required to allow use as function reference
     fn apply_mapping(input: u32, mapping: &&Mapping) -> u32 {
         mapping
             .iter()
@@ -70,7 +71,7 @@ pub fn generator(input: &str) -> (Seeds, GardenAlmanac) {
                 .collect::<Vec<u32>>();
             mapping.push(partial_mapping);
         }
-        mappings.push(mapping)
+        mappings.push(mapping);
     }
     (
         seeds,
