@@ -10,5 +10,5 @@ aoc_main::main! {
     day2 : generator => part1, part2;
     day3 : generator => part1, part2;
     day4 : generator => part1, part2;
-    day5 : generator => part1;
+    day5 : generator => part1, part1_with_ranges, part2 /*, part2_naive: doesn't complete */;
 }
