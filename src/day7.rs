@@ -7,6 +7,7 @@ use std::collections::HashSet;
 
 #[derive(Hash, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum Card {
+    Joker,
     Two,
     Three,
     Four,
@@ -41,8 +42,13 @@ pub struct Hand {
     cards: HandCards,
 }
 
+#[derive(Default)]
+struct CardsConfig {
+    j_is_joker: bool,
+}
+
 impl Hand {
-    fn from_card_str(cards: &str) -> Self {
+    fn from_card_str(cards: &str, config: &CardsConfig) -> Self {
         assert!(cards.len() == 5);
         if let Some(cards) = cards
             .chars()
@@ -50,7 +56,13 @@ impl Hand {
                 'A' => Card::Ace,
                 'K' => Card::King,
                 'Q' => Card::Queen,
-                'J' => Card::Jack,
+                'J' => {
+                    if config.j_is_joker {
+                        Card::Joker
+                    } else {
+                        Card::Jack
+                    }
+                }
                 'T' => Card::Ten,
                 '9' => Card::Nine,
                 '8' => Card::Eight,
@@ -84,29 +96,81 @@ impl Hand {
             5 => HandType::HighCard,
             _ => unreachable!(),
         };
-        Hand { hand_type, cards }
+        if let Some(joker_count) = counts.get(&Card::Joker) {
+            let hand_type = hand_type_with_jokers(&hand_type, *joker_count);
+            Hand { hand_type, cards }
+        } else {
+            Hand { hand_type, cards }
+        }
+    }
+}
+
+#[allow(clippy::match_same_arms)]
+fn hand_type_with_jokers(old_hand_type: &HandType, joker_count: usize) -> HandType {
+    match old_hand_type {
+        HandType::HighCard => match joker_count {
+            1 => HandType::OnePair, // Include any other card
+            _ => unreachable!(),    // At max 1 of each card
+        },
+        HandType::OnePair => match joker_count {
+            1 => HandType::ThreeOfAKind, // Include the existing pair
+            2 => HandType::ThreeOfAKind, // Joker pair => Include any other card
+            _ => unreachable!(),         // At max 2 of each card
+        },
+        HandType::TwoPair => match joker_count {
+            1 => HandType::FullHouse, // Include one of the existing pairs to get triplet & pair
+            2 => HandType::FourOfAKind, // Joker pair => Include other pair
+            _ => unreachable!(),      // At max 2 of each card
+        },
+        HandType::ThreeOfAKind => match joker_count {
+            1 => HandType::FourOfAKind, // Include the existing triplet
+            3 => HandType::FourOfAKind, // Joker triplet => Include any other card
+            _ => unreachable!(),        // At max 3 of each card & Joker pair will make FullHouse
+        },
+        HandType::FullHouse => match joker_count {
+            2 => HandType::FiveOfAKind, // Joker pair => Include the triplet
+            3 => HandType::FiveOfAKind, // Joker triplet => Include the pair
+            _ => unreachable!(),        // At max 3 of each card, and 1 Joker will make ThreeOfAKind
+        },
+        HandType::FourOfAKind => match joker_count {
+            1 => HandType::FiveOfAKind, // Include the Quadruplet
+            4 => HandType::FiveOfAKind, // Joker Quadruplet => Include the fifth card
+            _ => unreachable!(), // At max 4 of each card, and 2/3 Jokers would no longer be FourOfAKind
+        },
+        HandType::FiveOfAKind => HandType::FiveOfAKind, // What more you want?
     }
 }
 
 #[allow(clippy::unwrap_used)]
-pub fn generator(input: &str) -> Vec<(Hand, u32)> {
+fn parse_hands(input: &str, cards_config: &CardsConfig) -> Vec<(Hand, u32)> {
     input
         .lines()
         .map(|line| {
             let (cards_str, bid) = line.split_once(' ').unwrap();
-            (Hand::from_card_str(cards_str), bid.parse::<u32>().unwrap())
+            (
+                Hand::from_card_str(cards_str, cards_config),
+                bid.parse::<u32>().unwrap(),
+            )
         })
         .collect()
 }
 
-pub fn part1(hand_and_bid_list: &[(Hand, u32)]) -> u32 {
-    hand_and_bid_list
+fn calculate_bid(input: &str, cards_config: &CardsConfig) -> u32 {
+    parse_hands(input, cards_config)
         .iter()
         .sorted_by(|(hand_a, _), (hand_b, _)| Hand::cmp(hand_a, hand_b))
         .enumerate()
-        .inspect(|(i, (hand, bid))| println!("{} {hand:?} {bid}", i + 1))
+        // .inspect(|(i, (hand, bid))| println!("{} {hand:?} {bid}", i + 1))
         .map(|(i, (_, bid))| bid * (i as u32 + 1))
         .sum()
+}
+
+pub fn part1(input: &str) -> u32 {
+    calculate_bid(input, &CardsConfig::default())
+}
+
+pub fn part2(input: &str) -> u32 {
+    calculate_bid(input, &CardsConfig { j_is_joker: true })
 }
 
 #[cfg(test)]
@@ -125,11 +189,11 @@ mod tests {
 
     #[test]
     fn hand_ordering() {
-        let five_of_a_kind = Hand::from_card_str("AAAAA");
-        let four_of_a_kind = Hand::from_card_str("33332");
-        let four_of_a_kind_other = Hand::from_card_str("2AAAA");
-        let three_of_a_kind = Hand::from_card_str("T55J5");
-        let two_pair = Hand::from_card_str("KTJJT");
+        let five_of_a_kind = Hand::from_card_str("AAAAA", &CardsConfig::default());
+        let four_of_a_kind = Hand::from_card_str("33332", &CardsConfig::default());
+        let four_of_a_kind_other = Hand::from_card_str("2AAAA", &CardsConfig::default());
+        let three_of_a_kind = Hand::from_card_str("T55J5", &CardsConfig::default());
+        let two_pair = Hand::from_card_str("KTJJT", &CardsConfig::default());
         assert!(five_of_a_kind > four_of_a_kind);
         assert!(five_of_a_kind > four_of_a_kind_other);
         assert!(four_of_a_kind > four_of_a_kind_other);
@@ -138,6 +202,11 @@ mod tests {
 
     #[test]
     fn part1_example() {
-        assert_eq!(part1(&generator(EXAMPLE_INPUT)), 6440);
+        assert_eq!(part1(EXAMPLE_INPUT), 6440);
+    }
+
+    #[test]
+    fn part2_example() {
+        assert_eq!(part2(EXAMPLE_INPUT), 5905);
     }
 }
