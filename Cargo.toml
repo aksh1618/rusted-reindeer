@@ -11,6 +11,9 @@ itertools = "0.12.0"
 [dev-dependencies]
 indoc = "2.0.4"
 
+[profile.release]
+overflow-checks = true # To avoid being fooled by a false answer on running `cargo run --release`
+
 [lints.clippy]
 # Warn
 # suspicious, complexity, perf & style groups are warn-by-default
